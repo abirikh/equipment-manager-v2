@@ -34,9 +34,11 @@ public class MainFX extends Application {
         Button addButton = new Button("Добавить");
         Button editButton = new Button("Редактировать");
         Button deleteButton = new Button("Удалить");
+        Button qrButton = new Button("Сгенерировать QR");
 
-        HBox formBox = new HBox(8, nameField, serialField, descriptionField, locationField, addButton, editButton, deleteButton);
+        HBox formBox = new HBox(8, nameField, serialField, descriptionField, locationField, addButton, editButton, deleteButton, qrButton);
         formBox.setStyle("-fx-padding: 8;");
+
 
 
         // --- Поле поиска ---
@@ -170,6 +172,24 @@ public class MainFX extends Application {
 
             database.deleteEquipment(selected.getId());
             equipmentData.setAll(database.getAllEquipment());
+        });
+
+        qrButton.setOnAction(e -> {
+            Equipment selected = table.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                new Alert(Alert.AlertType.WARNING, "Выберите запись для QR!").showAndWait();
+                return;
+            }
+
+            // Можно закодировать все данные или только ID
+            String qrText = "ID:" + selected.getId() +
+                    "\nНазвание: " + selected.getName() +
+                    "\nСерийный номер: " + selected.getSerialNumber() +
+                    "\nОписание: " + selected.getDescription() +
+                    "\nРасположение: " + selected.getLocation();
+
+            qr.QrGenerator.generateQr(qrText, "qr_" + selected.getId());
+            new Alert(Alert.AlertType.INFORMATION, "QR-код сгенерирован: qr_" + selected.getId() + ".png").showAndWait();
         });
 
 
