@@ -1,5 +1,6 @@
 package app;
 
+import bot.EquipmentBot;
 import db.Database;
 import model.Equipment;
 import javafx.application.Application;
@@ -11,6 +12,8 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import org.telegram.telegrambots.meta.TelegramBotsApi;
+import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 public class MainFX extends Application {
     private final Database database = new Database();
@@ -95,7 +98,21 @@ public class MainFX extends Application {
                 });
             }
         });
+        // ✅ Запускаем бота в отдельном потоке
+        new Thread(() -> {
+            try {
+                String token = "8458380504:AAFTHb47N4DdyGtaSblyzGwaJgr_xBobiaU";
+                String username = "RusenegroEquipmentBot";
+                TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
+                botsApi.registerBot(new EquipmentBot(token, username));
+                System.out.println("✅ Бот запущен вместе с приложением");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
 
+        stage.setTitle("База оборудования");
+        stage.show();
         // SortedList чтобы сортировка столбцов работала корректно
         SortedList<Equipment> sortedData = new SortedList<>(filteredData);
         sortedData.comparatorProperty().bind(table.comparatorProperty());
