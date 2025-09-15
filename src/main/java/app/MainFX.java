@@ -1,8 +1,10 @@
 package app;
 
 import bot.EquipmentBot;
-import db.Database;
 import model.Equipment;
+import repository.EquipmentRepository;
+import repository.SQLiteEquipmentRepository;
+
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -16,12 +18,12 @@ import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 public class MainFX extends Application {
-    private final Database database = new Database();
+    private final EquipmentRepository repository = new SQLiteEquipmentRepository();
     private ObservableList<Equipment> equipmentData;
 
     @Override
     public void start(Stage stage) {
-        // --- Поля ввода для добавления ---
+        // --- Поля ввода ---
         TextField nameField = new TextField();
         nameField.setPromptText("Название");
 
@@ -42,9 +44,7 @@ public class MainFX extends Application {
         HBox formBox = new HBox(8, nameField, serialField, descriptionField, locationField, addButton, editButton, deleteButton, qrButton);
         formBox.setStyle("-fx-padding: 8;");
 
-
-
-        // --- Поле поиска ---
+        // --- Поиск ---
         TextField searchField = new TextField();
         searchField.setPromptText("Поиск (название / серийный / описание / расположение)");
         Button clearSearch = new Button("×");
@@ -77,13 +77,21 @@ public class MainFX extends Application {
 
         table.getColumns().addAll(colId, colName, colSerial, colDescription, colLocation);
 
+        // Автозаполнение полей при выборе строки
+        table.getSelectionModel().selectedItemProperty().addListener((obs, oldSel, newSel) -> {
+            if (newSel != null) {
+                nameField.setText(newSel.getName());
+                serialField.setText(newSel.getSerialNumber());
+                descriptionField.setText(newSel.getDescription());
+                locationField.setText(newSel.getLocation());
+            }
+        });
+
         // --- Данные ---
-        equipmentData = FXCollections.observableArrayList(database.getAllEquipment());
+        equipmentData = FXCollections.observableArrayList(repository.getAllEquipment());
 
-        // FilteredList для поиска
+        // --- Поиск и фильтрация ---
         FilteredList<Equipment> filteredData = new FilteredList<>(equipmentData, p -> true);
-
-        // Листенер для поля поиска (реагирует на каждое изменение)
         searchField.textProperty().addListener((obs, oldVal, newVal) -> {
             String filter = (newVal == null) ? "" : newVal.trim().toLowerCase();
             if (filter.isEmpty()) {
@@ -98,10 +106,15 @@ public class MainFX extends Application {
                 });
             }
         });
-        // ✅ Запускаем бота в отдельном потоке
+
+        SortedList<Equipment> sortedData = new SortedList<>(filteredData);
+        sortedData.comparatorProperty().bind(table.comparatorProperty());
+        table.setItems(sortedData);
+
+        // ✅ Запускаем бота
         new Thread(() -> {
             try {
-                String token = "8458380504:AAFTHb47N4DdyGtaSblyzGwaJgr_xBobiaU";
+                String token = "---";
                 String username = "RusenegroEquipmentBot";
                 TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
                 botsApi.registerBot(new EquipmentBot(token, username));
@@ -111,14 +124,7 @@ public class MainFX extends Application {
             }
         }).start();
 
-        stage.setTitle("База оборудования");
-        stage.show();
-        // SortedList чтобы сортировка столбцов работала корректно
-        SortedList<Equipment> sortedData = new SortedList<>(filteredData);
-        sortedData.comparatorProperty().bind(table.comparatorProperty());
-        table.setItems(sortedData);
-
-        // --- Обработчик кнопки Добавить ---
+        // --- Обработчики кнопок ---
         addButton.setOnAction(e -> {
             String name = nameField.getText().trim();
             String serial = serialField.getText().trim();
@@ -130,29 +136,16 @@ public class MainFX extends Application {
                 return;
             }
 
-            database.insertEquipment(name, serial, desc, loc);
+            Equipment eq = new Equipment(name, serial, desc, loc);
+            repository.insertEquipment(eq);
+            equipmentData.setAll(repository.getAllEquipment());
 
-            // Обновляем список — проще перезаполнить из БД (гарантия согласованности)
-            equipmentData.setAll(database.getAllEquipment());
-
-            // Очищаем поля
             nameField.clear();
             serialField.clear();
             descriptionField.clear();
             locationField.clear();
         });
 
-        table.getSelectionModel().selectedItemProperty().addListener((obs, oldSel, newSel) -> {
-            if (newSel != null) {
-                nameField.setText(newSel.getName());
-                serialField.setText(newSel.getSerialNumber());
-                descriptionField.setText(newSel.getDescription());
-                locationField.setText(newSel.getLocation());
-            }
-        });
-
-
-        // Обработчик кнопки Редактировать
         editButton.setOnAction(e -> {
             Equipment selected = table.getSelectionModel().getSelectedItem();
             if (selected == null) {
@@ -170,8 +163,9 @@ public class MainFX extends Application {
                 return;
             }
 
-            database.updateEquipment(selected.getId(), name, serial, desc, loc);
-            equipmentData.setAll(database.getAllEquipment());
+            Equipment updated = new Equipment(selected.getId(), name, serial, desc, loc);
+            repository.updateEquipment(updated);
+            equipmentData.setAll(repository.getAllEquipment());
 
             nameField.clear();
             serialField.clear();
@@ -179,7 +173,6 @@ public class MainFX extends Application {
             locationField.clear();
         });
 
-// Обработчик кнопки Удалить
         deleteButton.setOnAction(e -> {
             Equipment selected = table.getSelectionModel().getSelectedItem();
             if (selected == null) {
@@ -187,8 +180,8 @@ public class MainFX extends Application {
                 return;
             }
 
-            database.deleteEquipment(selected.getId());
-            equipmentData.setAll(database.getAllEquipment());
+            repository.deleteEquipment(selected.getId());
+            equipmentData.setAll(repository.getAllEquipment());
         });
 
         qrButton.setOnAction(e -> {
@@ -198,7 +191,6 @@ public class MainFX extends Application {
                 return;
             }
 
-            // Можно закодировать все данные или только ID
             String qrText = "ID:" + selected.getId() +
                     "\nНазвание: " + selected.getName() +
                     "\nСерийный номер: " + selected.getSerialNumber() +
@@ -209,8 +201,7 @@ public class MainFX extends Application {
             new Alert(Alert.AlertType.INFORMATION, "QR-код сгенерирован: qr_" + selected.getId() + ".png").showAndWait();
         });
 
-
-        // --- Макет ---
+        // --- UI ---
         VBox topBox = new VBox(formBox, searchBox);
         BorderPane root = new BorderPane();
         root.setTop(topBox);
