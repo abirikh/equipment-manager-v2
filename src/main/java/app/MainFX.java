@@ -17,6 +17,9 @@ import javafx.stage.Stage;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
+import java.io.FileInputStream;
+import java.util.Properties;
+
 public class MainFX extends Application {
     private final EquipmentRepository repository = new SQLiteEquipmentRepository();
     private ObservableList<Equipment> equipmentData;
@@ -31,7 +34,7 @@ public class MainFX extends Application {
         serialField.setPromptText("Серийный номер");
 
         TextField descriptionField = new TextField();
-        descriptionField.setPromptText("Описание");
+        descriptionField.setPromptText("Ответственный");
 
         TextField locationField = new TextField();
         locationField.setPromptText("Расположение");
@@ -40,13 +43,18 @@ public class MainFX extends Application {
         Button editButton = new Button("Редактировать");
         Button deleteButton = new Button("Удалить");
         Button qrButton = new Button("Сгенерировать QR");
+        Button exportButton = new Button("Экспорт в Excel");
+        Button refreshButton = new Button("Обновить");
 
-        HBox formBox = new HBox(8, nameField, serialField, descriptionField, locationField, addButton, editButton, deleteButton, qrButton);
+
+        HBox formBox = new HBox(8, nameField, serialField, descriptionField,
+                locationField, addButton, editButton, deleteButton,
+                qrButton, exportButton, refreshButton);
         formBox.setStyle("-fx-padding: 8;");
 
         // --- Поиск ---
         TextField searchField = new TextField();
-        searchField.setPromptText("Поиск (название / серийный / описание / расположение)");
+        searchField.setPromptText("Поиск (название / серийный / ответственный / расположение)");
         Button clearSearch = new Button("×");
         clearSearch.setOnAction(e -> searchField.clear());
         HBox searchBox = new HBox(6, new Label("Поиск:"), searchField, clearSearch);
@@ -67,7 +75,7 @@ public class MainFX extends Application {
         colSerial.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().getSerialNumber()));
         colSerial.setPrefWidth(140);
 
-        TableColumn<Equipment, String> colDescription = new TableColumn<>("Описание");
+        TableColumn<Equipment, String> colDescription = new TableColumn<>("Ответственный");
         colDescription.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().getDescription()));
         colDescription.setPrefWidth(200);
 
@@ -114,10 +122,13 @@ public class MainFX extends Application {
         // ✅ Запускаем бота
         new Thread(() -> {
             try {
-                String token = "---";
-                String username = "RusenegroEquipmentBot";
+                Properties props = new Properties();
+                props.load(new FileInputStream("config.properties"));
+
+                String token = props.getProperty("BOT_TOKEN");
+                String username = props.getProperty("BOT_USERNAME");
                 TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-                botsApi.registerBot(new EquipmentBot(token, username));
+                botsApi.registerBot(new EquipmentBot());
                 System.out.println("✅ Бот запущен вместе с приложением");
             } catch (Exception e) {
                 e.printStackTrace();
@@ -194,12 +205,76 @@ public class MainFX extends Application {
             String qrText = "ID:" + selected.getId() +
                     "\nНазвание: " + selected.getName() +
                     "\nСерийный номер: " + selected.getSerialNumber() +
-                    "\nОписание: " + selected.getDescription() +
+                    "\nОтветственный: " + selected.getDescription() +
                     "\nРасположение: " + selected.getLocation();
 
             qr.QrGenerator.generateQr(qrText, "qr_" + selected.getId());
             new Alert(Alert.AlertType.INFORMATION, "QR-код сгенерирован: qr_" + selected.getId() + ".png").showAndWait();
         });
+
+        exportButton.setOnAction(e -> {
+            try {
+                // Диалог выбора файла
+                javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+                fileChooser.setTitle("Сохранить экспорт в Excel");
+                fileChooser.getExtensionFilters().add(
+                        new javafx.stage.FileChooser.ExtensionFilter("Excel файлы (*.xlsx)", "*.xlsx")
+                );
+                fileChooser.setInitialFileName("equipment_export.xlsx");
+
+                java.io.File file = fileChooser.showSaveDialog(stage);
+                if (file == null) {
+                    return; // пользователь отменил выбор
+                }
+
+                // Создаём книгу Excel
+                org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+                org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Оборудование");
+
+                // Заголовки
+                org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+                header.createCell(0).setCellValue("ID");
+                header.createCell(1).setCellValue("Название");
+                header.createCell(2).setCellValue("Серийный номер");
+                header.createCell(3).setCellValue("Ответственный");
+                header.createCell(4).setCellValue("Расположение");
+
+                // Данные
+                int rowNum = 1;
+                for (Equipment eq : repository.getAllEquipment()) {
+                    org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowNum++);
+                    row.createCell(0).setCellValue(eq.getId());
+                    row.createCell(1).setCellValue(eq.getName());
+                    row.createCell(2).setCellValue(eq.getSerialNumber());
+                    row.createCell(3).setCellValue(eq.getDescription());
+                    row.createCell(4).setCellValue(eq.getLocation());
+                }
+
+                // Автоширина колонок
+                for (int i = 0; i < 5; i++) {
+                    sheet.autoSizeColumn(i);
+                }
+
+                // Сохраняем файл
+                try (java.io.FileOutputStream fileOut = new java.io.FileOutputStream(file)) {
+                    workbook.write(fileOut);
+                }
+                workbook.close();
+
+                new Alert(Alert.AlertType.INFORMATION, "Экспорт завершён!\nФайл: " + file.getAbsolutePath()).showAndWait();
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                new Alert(Alert.AlertType.ERROR, "Ошибка экспорта: " + ex.getMessage()).showAndWait();
+            }
+        });
+
+        refreshButton.setOnAction(e -> {
+            equipmentData.setAll(repository.getAllEquipment());
+            new Alert(Alert.AlertType.INFORMATION, "Данные обновлены ✅").showAndWait();
+        });
+
+
 
         // --- UI ---
         VBox topBox = new VBox(formBox, searchBox);
@@ -208,7 +283,7 @@ public class MainFX extends Application {
         root.setCenter(table);
 
         stage.setScene(new Scene(root, 900, 500));
-        stage.setTitle("Учёт оборудования — поиск/фильтрация");
+        stage.setTitle("Учёт оборудования Русенерго");
         stage.show();
     }
 

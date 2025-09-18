@@ -130,7 +130,7 @@ public class SQLiteEquipmentRepository implements EquipmentRepository {
     public List<Equipment> searchEquipment(String query) {
         List<Equipment> list = new ArrayList<>();
         String sql = "SELECT * FROM equipment WHERE " +
-                "LOWER(name) LIKE ? OR LOWER(serialNumber) LIKE ? OR LOWER(description) LIKE ? OR LOWER(location) LIKE ? " +
+                "LOWER(name) LIKE ? OR LOWER(serial_number) LIKE ? OR LOWER(description) LIKE ? OR LOWER(location) LIKE ? " +
                 "ORDER BY id";
 
         try (Connection conn = DriverManager.getConnection(url);
@@ -147,8 +147,8 @@ public class SQLiteEquipmentRepository implements EquipmentRepository {
                     list.add(new Equipment(
                             rs.getInt("id"),
                             rs.getString("name"),
-                            rs.getString("serialNumber"),
-                            rs.getString("description"),
+                            rs.getString("serial_number"),
+                            rs.getString("responsible"),
                             rs.getString("location")
                     ));
                 }
@@ -158,6 +158,7 @@ public class SQLiteEquipmentRepository implements EquipmentRepository {
         }
         return list;
     }
+
 
     @Override
     public void updateDescription(int id, String newDescription) {

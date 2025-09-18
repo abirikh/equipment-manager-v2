@@ -49,6 +49,14 @@
             <version>1.4.14</version> <!-- Проверьте актуальную версию -->
         </dependency>
 
+        <!-- Apache POI для Excel -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
+
+
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
