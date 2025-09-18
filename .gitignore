@@ -27,7 +27,24 @@ target/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
+build/# Java
+      *.class
+      *.jar
+      *.war
+      *.ear
+
+      # IntelliJ IDEA
+      .idea/
+      *.iml
+      out/
+      target/
+
+      # OS
+      .DS_Store
+
+      # Configs
+      config.properties
+
 !**/src/main/**/build/
 !**/src/test/**/build/
 
