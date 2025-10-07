@@ -283,7 +283,7 @@ public class MainFX extends Application {
         root.setCenter(table);
 
         stage.setScene(new Scene(root, 900, 500));
-        stage.setTitle("Учёт оборудования Русенерго");
+        stage.setTitle("Учёт оборудования Русэнерго");
         stage.show();
     }
 
